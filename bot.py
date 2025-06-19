@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler
 from functools import wraps
 
 # Load .env file
@@ -92,6 +92,12 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[SIGNED OUT] User {user_id} has signed out.")
     await update.message.reply_text("👋 You've been signed out.")
 
+@restricted_command
+async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    print(f"[CHAT ID] User: {update.effective_user.id}, Chat: {chat.id}, Type: {chat.type}, Title: {chat.title}")
+    await update.message.reply_text(f"🆔 Chat ID has been logged. (Chat Type: {chat.type})")
+
 # 🟢 Example protected command
 @restricted_command
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,6 +110,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("getchatid", get_chat_id))
 
     logging.debug("🔐 Very Private Bot Running...")
     app.run_polling()
