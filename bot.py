@@ -21,7 +21,7 @@ def load_allowed_users(path=".config/allowed_users.txt"):
 ALLOWED_USERS = load_allowed_users()
 
 # 💾 Persistent sign-in
-SIGNED_IN_FILE = "signed_in.json"
+SIGNED_IN_FILE = ".config/signed_in.json"
 
 def save_signed_in():
     with open(SIGNED_IN_FILE, "w") as f:

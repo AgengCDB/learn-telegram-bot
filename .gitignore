@@ -1,5 +1,6 @@
 test/
 .config/
+signed_in.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
