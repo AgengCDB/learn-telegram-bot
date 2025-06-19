@@ -1,6 +1,15 @@
 import os
 import json
 from dotenv import load_dotenv
+
+import logging
+
+logging.basicConfig(
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    level=logging.INFO
+)
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from functools import wraps
@@ -54,9 +63,11 @@ def restricted_command(func):
         user_id = update.effective_user.id
         if user_id not in ALLOWED_USERS:
             await update.message.reply_text("❌ Access denied.")
+            logging.warning(f"Access denied for user {user_id}")
             return
         if user_id not in SIGNED_IN_USERS:
             await update.message.reply_text("❌ Please use /start to sign in first.")
+            logging.warning(f"User {user_id} attempted a command without signing in.")
             return
         return await func(update, context, *args, **kwargs)
     return wrapper
@@ -69,6 +80,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     SIGNED_IN_USERS.add(user_id)
     save_signed_in()
+    logging.info(f"[SIGNED IN] User {user_id} has signed in.")
     await update.message.reply_text("✅ Signed in successfully! You may now use commands.")
 
 # ❌ /stop = sign out
@@ -77,6 +89,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     SIGNED_IN_USERS.discard(user_id)
     save_signed_in()
+    logging.info(f"[SIGNED OUT] User {user_id} has signed out.")
     await update.message.reply_text("👋 You've been signed out.")
 
 # 🟢 Example protected command
@@ -92,5 +105,5 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("status", status))
 
-    print("🔐 Very Private Bot Running...")
+    logging.debug("🔐 Very Private Bot Running...")
     app.run_polling()
