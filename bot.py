@@ -1,116 +1,89 @@
 import os
 import json
-from dotenv import load_dotenv
-
-import logging
-
-logging.basicConfig(
-    format='[%(asctime)s] [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    level=logging.INFO
-)
-
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler
 from functools import wraps
+from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Load .env file
+from custom_library.print import print_rd, print_gr, print_yl, print_bl
+from custom_library.load import load_signed_in
+from custom_library.save import save_signed_in
+from custom_library.persistent import SIGNED_IN_FILE, SIGNED_IN_USERS
+
+from decorator import restricted, cooldown
+
+from getdatadummyhistory import getdatadummyhistory_handler
+from checkdbconn import checkdbconn_handler
+from help import help_handler
+
+# Load environment
 load_dotenv()
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ALLOWED_GROUP_ID = int(os.getenv("ALLOWED_GROUP_ID"))
+ALLOWED_USER_IDS = set(map(int, os.getenv("ALLOWED_USER_IDS", "").split(",")))
 
-# 📁 Allowed users file
-def load_allowed_users(path=".config/allowed_users.txt"):
-    try:
-        with open(path, "r") as file:
-            return set(int(line.strip()) for line in file if line.strip().isdigit())
-    except FileNotFoundError:
-        print("⚠️ allowed_users.txt not found.")
-        return set()
-
-ALLOWED_USERS = load_allowed_users()
-
-# 💾 Persistent sign-in
-SIGNED_IN_FILE = ".config/signed_in.json"
-
-def save_signed_in():
-    with open(SIGNED_IN_FILE, "w") as f:
-        json.dump(list(SIGNED_IN_USERS), f)
-
-def load_signed_in():
-    if not os.path.exists(SIGNED_IN_FILE):
-        # Create an empty file if it doesn't exist
-        with open(SIGNED_IN_FILE, "w") as f:
-            json.dump([], f)
-        return set()
-
-    try:
-        with open(SIGNED_IN_FILE, "r") as f:
-            return set(json.load(f))
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"⚠️ Failed to read {SIGNED_IN_FILE}: {e}")
-        return set()
-
-SIGNED_IN_USERS = load_signed_in()
-
-# 🔐 Middleware check
-def is_authenticated(user_id: int) -> bool:
-    return user_id in SIGNED_IN_USERS and user_id in ALLOWED_USERS
-
-# 🔐 Access control decorator
-def restricted_command(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        user_id = update.effective_user.id
-        if user_id not in ALLOWED_USERS:
-            await update.message.reply_text("❌ Access denied.")
-            logging.warning(f"Access denied for user {user_id}")
-            return
-        if user_id not in SIGNED_IN_USERS:
-            await update.message.reply_text("❌ Please use /start to sign in first.")
-            logging.warning(f"User {user_id} attempted a command without signing in.")
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapper
-
-# ✅ /start = sign in
+# /start = sign in
+@restricted
+@cooldown(s=30)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
     user_id = update.effective_user.id
-    if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ Access denied.")
+
+    if chat.type not in ["group", "supergroup"] or chat.id != ALLOWED_GROUP_ID:
+        return
+
+    if user_id not in ALLOWED_USER_IDS:
+        await update.message.reply_text("❌ You're not allowed to use this bot.")
+        print_rd(f"[DENIED] {user_id} not in allowed list.")
         return
     SIGNED_IN_USERS.add(user_id)
-    save_signed_in()
-    logging.info(f"[SIGNED IN] User {user_id} has signed in.")
-    await update.message.reply_text("✅ Signed in successfully! You may now use commands.")
+    save_signed_in(signed_in_file=SIGNED_IN_FILE, signed_in_users=SIGNED_IN_USERS)
+    print_gr(f"[SIGN IN] {user_id} signed in.")
+    await update.message.reply_text("✅ You are now signed in and may use the bot.")
 
-# ❌ /stop = sign out
-@restricted_command
+# /stop = sign out
+@restricted
+@cooldown(s=30)
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     SIGNED_IN_USERS.discard(user_id)
-    save_signed_in()
-    logging.info(f"[SIGNED OUT] User {user_id} has signed out.")
-    await update.message.reply_text("👋 You've been signed out.")
+    save_signed_in(signed_in_file=SIGNED_IN_FILE, signed_in_users=SIGNED_IN_USERS)
+    print_gr(f"[SIGN OUT] {user_id} signed out.")
+    await update.message.reply_text("👋 You have been signed out.")
 
-@restricted_command
-async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    print(f"[CHAT ID] User: {update.effective_user.id}, Chat: {chat.id}, Type: {chat.type}, Title: {chat.title}")
-    await update.message.reply_text(f"🆔 Chat ID has been logged. (Chat Type: {chat.type})")
-
-# 🟢 Example protected command
-@restricted_command
+# /status = check
+@restricted
+@cooldown(m=2)
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🟢 Status: All systems operational.")
+    await update.message.reply_text("🟢 Bot is active and you're signed in!")
 
-# 🚀 Run the bot
-if __name__ == '__main__':
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+from telegram import Update
+from telegram.ext import ContextTypes
 
+@cooldown(m=10)
+async def print_ids(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat = update.effective_chat
+    chat_id = chat.id
+    chat_type = chat.type
+
+    print_bl(f"[INFO] User ID: {user_id} | Chat ID: {chat_id} | Chat Type: {chat_type}")
+
+    await update.message.reply_text("✅ Success.")
+
+# Main
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(help_handler())
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("getchatid", get_chat_id))
+    app.add_handler(CommandHandler("printids", print_ids))
+    
+    app.add_handler(getdatadummyhistory_handler())
+    app.add_handler(checkdbconn_handler())
 
-    logging.debug("🔐 Very Private Bot Running...")
+    print_bl("🤖 Bot is running...")
     app.run_polling()
