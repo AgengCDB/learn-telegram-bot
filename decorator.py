@@ -7,15 +7,12 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from custom_library.print import print_yl, print_rd
-from custom_library.persistent import SIGNED_IN_USERS
+from custom_library.persistent import COOLDOWN_FILE
 
 # Load environment variables
 load_dotenv()
-ALLOWED_GROUP_ID = int(os.getenv("ALLOWED_GROUP_ID"))
+ALLOWED_GROUP_IDS = set(map(int, os.getenv("ALLOWED_GROUP_IDS", "").split(",")))
 ALLOWED_USER_IDS = set(map(int, os.getenv("ALLOWED_USER_IDS", "").split(",")))
-
-# Cooldown file
-COOLDOWN_FILE = ".config/cooldown.json"
 
 def load_cooldowns():
     if not os.path.exists(COOLDOWN_FILE):
@@ -55,18 +52,16 @@ def restricted(func):
         chat = update.effective_chat
         user_id = update.effective_user.id
 
-        if chat.type not in ["group", "supergroup"] or chat.id != ALLOWED_GROUP_ID:
+        if chat.type not in ["group", "supergroup"]:
             print_yl(f"[RESTRICTED] IGNORED {user_id} (wrong chat)")
             return
 
-        if user_id not in ALLOWED_USER_IDS:
-            await update.message.reply_text("❌ Access denied.")
-            print_yl(f"[RESTRICTED] DENIED {user_id} not in allowed list.")
+        if chat.id not in ALLOWED_GROUP_IDS:
+            print_yl(f"[RESTRICTED] DENIED {chat.id} not in allowed group list.")
             return
-
-        if user_id not in SIGNED_IN_USERS:
-            await update.message.reply_text("❌ Please use /start to sign in first.")
-            print_yl(f"[RESTRICTED] UNSIGNED {user_id} tried command.")
+        
+        if user_id not in ALLOWED_USER_IDS:
+            print_yl(f"[RESTRICTED] DENIED {user_id} not in allowed user list.")
             return
 
         return await func(update, context, *args, **kwargs)
@@ -81,6 +76,7 @@ def cooldown(h=0, m=0, s=0):
         @wraps(func)
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
             user_id = update.effective_user.id
+            chat = update.effective_chat
             func_name = func.__name__
             now = datetime.now()
 
@@ -88,9 +84,10 @@ def cooldown(h=0, m=0, s=0):
             if last_used and now < last_used:
                 remaining = last_used - now
                 remaining_str = str(remaining).split(".")[0]
-                await update.message.reply_text(
-                    f"⚠️ This command was used recently. Please wait {remaining_str} before trying again."
-                )
+                if chat.id in ALLOWED_GROUP_IDS:
+                    await update.message.reply_text(
+                        f"⚠️ This command was used recently. Please wait {remaining_str} before trying again."
+                    )
                 print_yl(f"""[COOLDOWN] {user_id} tried /{func_name} too soon.""")
                 return
 

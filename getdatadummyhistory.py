@@ -1,13 +1,12 @@
 # getdatadummyhistory.py
 from datetime import datetime
-
 from telegram.ext import CommandHandler, MessageHandler, ConversationHandler, filters
 from telegram import Update, InputFile
 from telegram.ext import ContextTypes
 
 import os
 import pandas as pd
-import psycopg2
+from sqlalchemy import create_engine  # 🔄 NEW: SQLAlchemy
 
 from custom_library.print import print_rd
 from decorator import restricted, cooldown
@@ -15,7 +14,7 @@ from decorator import restricted, cooldown
 ASK_HOUR = 1
 
 @restricted
-@cooldown(m=30)
+@cooldown(m=1)
 async def getdatadummyhistory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏱️ How many hours back? (max 48)")
     return ASK_HOUR
@@ -32,20 +31,16 @@ async def receive_hour(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ASK_HOUR
 
     try:
-        conn = psycopg2.connect(
-            dbname=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASS"),
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT")
-        )
+        # 🔄 Use SQLAlchemy instead of psycopg2
+        db_url = f"postgresql+psycopg2://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+        engine = create_engine(db_url)
 
         df = pd.read_sql_query(f"""
             SELECT * FROM dummy_history
             WHERE time >= NOW() - INTERVAL '{hour} hours'
             ORDER BY time DESC
-        """, conn)
-        conn.close()
+        """, con=engine)
+
     except Exception as e:
         print_rd(e)
         await update.message.reply_text(f"❌ Database error: {e}")

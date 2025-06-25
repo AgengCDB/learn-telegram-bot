@@ -9,10 +9,7 @@ from decorator import restricted, cooldown
 HELP_TEXT = """
 🤖 *Available Commands*:
 
-/start — Sign in to use the bot
-/stop — Sign out from the bot
 /status — Check system status
-
 /getdatadummyhistory — Get dummy data from the last N hours
 /checkdbconn - Check database connection
 """

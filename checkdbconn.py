@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, CommandHandler
 from decorator import restricted, cooldown
 
 @restricted
-@cooldown(m=10)
+@cooldown(m=1)
 async def checkdbconn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         conn = psycopg2.connect(
