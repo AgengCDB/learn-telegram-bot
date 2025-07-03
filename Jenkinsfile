@@ -5,35 +5,31 @@ pipeline {
     }
   }
 
+  environment {
+    VENV_PATH = '.venv'
+  }
+
   stages {
-    stage('Install dependencies') {
+    stage('Setup venv') {
       steps {
         sh '''
+          python -m venv $VENV_PATH
+          . $VENV_PATH/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt || pip install python-telegram-bot
         '''
       }
     }
 
-    stage('Basic check') {
+    stage('Check syntax') {
       steps {
-        sh 'python -m py_compile bot.py'
-      }
-    }
-
-    stage('Run (dry check)') {
-      steps {
-        echo '✅ Code looks OK. Not running bot in CI.'
+        sh '. $VENV_PATH/bin/activate && python -m py_compile bot.py'
       }
     }
   }
 
   post {
-    success {
-      echo '🎉 Build passed. Your Telegram bot code looks fine!'
-    }
-    failure {
-      echo '❌ Build failed! Please fix syntax or dependency issues.'
-    }
+    success { echo '✅ All good!' }
+    failure { echo '❌ Fix issues and try again.' }
   }
 }
