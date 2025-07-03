@@ -42,3 +42,5 @@ if __name__ == "__main__":
 
     print_bl("🤖 Bot is running...")
     app.run_polling()
+
+    def broken()
