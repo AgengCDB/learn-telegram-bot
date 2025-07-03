@@ -10,7 +10,7 @@ pipeline {
 
     stage('Basic check') {
       steps {
-        sh 'python -m py_compile main.py'
+        sh 'python -m py_compile bot.py'
       }
     }
 
