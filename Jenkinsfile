@@ -1,10 +1,17 @@
 pipeline {
-  agent any
+  agent {
+    docker {
+      image 'python:3.10-slim'
+    }
+  }
 
   stages {
     stage('Install dependencies') {
       steps {
-        sh 'pip install -r requirements.txt || pip install python-telegram-bot'
+        sh '''
+          pip install --upgrade pip
+          pip install -r requirements.txt || pip install python-telegram-bot
+        '''
       }
     }
 
